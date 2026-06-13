@@ -1,10 +1,11 @@
 // ==UserScript==
-// @name         WebGPU Video Upscaler (RAVU-Zoom-AR r2 - Fixed)
+// @name         WebGPU Video Upscaler (RAVU-Zoom-AR r2)
 // @namespace    http://tampermonkey.net/
-// @version      1.3
-// @description  WebGPU RAVU-Zoom-AR r2 video upscaling (YUV). Fixed Hex parsing corruption, WGSL clamp error, and float NaN artifacts.
-// @author       You
+// @version      0.0.1
+// @description  WebGPU RAVU-Zoom-AR r2 video upscaling
+// @author       Ckrvxr
 // @match        *://*/*
+// @license       LGPL-3.0-or-later
 // @grant        none
 // ==/UserScript==
 
