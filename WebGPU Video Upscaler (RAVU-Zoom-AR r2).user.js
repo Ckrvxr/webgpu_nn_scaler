@@ -428,11 +428,36 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
             const targetHeight = video.videoHeight * 2;
 
             if (canvas.width !== targetWidth || canvas.height !== targetHeight) {
-                canvas.width = targetWidth; canvas.height = targetHeight;
-                const rect = video.getBoundingClientRect();
-                canvas.style.width = rect.width + 'px'; canvas.style.height = rect.height + 'px';
-                canvas.style.top = video.offsetTop + 'px'; canvas.style.left = video.offsetLeft + 'px';
+                canvas.width = targetWidth;
+                canvas.height = targetHeight;
             }
+            const vr = video.getBoundingClientRect();
+            let cr = canvas.parentNode;
+            while (cr && cr !== document.documentElement && cr !== document.body) {
+                const p = getComputedStyle(cr).position;
+                if (p !== 'static') break;
+                cr = cr.parentNode;
+            }
+            const cb = cr.getBoundingClientRect ? cr.getBoundingClientRect() : { left: 0, top: 0 };
+            const ar = video.videoWidth / video.videoHeight;
+            const cssAr = vr.width / vr.height;
+            let w = vr.width;
+            let h = vr.height;
+            let left = vr.left - cb.left;
+            let top = vr.top - cb.top;
+            if (Math.abs(cssAr - ar) > 0.001) {
+                if (cssAr > ar) {
+                    w = Math.round(vr.height * ar);
+                    left += (vr.width - w) / 2;
+                } else {
+                    h = Math.round(vr.width / ar);
+                    top += (vr.height - h) / 2;
+                }
+            }
+            canvas.style.width = w + 'px';
+            canvas.style.height = h + 'px';
+            canvas.style.left = left + 'px';
+            canvas.style.top = top + 'px';
 
             const uniformData = new Float32Array([
                 video.videoWidth, video.videoHeight,
