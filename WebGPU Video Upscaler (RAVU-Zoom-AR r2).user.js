@@ -28,22 +28,86 @@
     let isUpscalerActive = true;
 
     function createToggleButton() {
-        const btn = document.createElement('button');
-        btn.innerHTML = '✨ 开启 RAVU-Zoom-AR';
+        const btn = document.createElement('div');
+        btn.innerHTML = '<span>RAVU</span>';
         Object.assign(btn.style, {
-            position: 'fixed', bottom: '30px', right: '30px', zIndex: '2147483647',
-            padding: '10px 15px', backgroundColor: '#00a1d6', color: 'white',
-            border: 'none', borderRadius: '8px', fontFamily: 'sans-serif',
-            fontWeight: 'bold', cursor: 'pointer', boxShadow: '0 4px 6px rgba(0,0,0,0.3)',
-            transition: 'all 0.2s'
+            position: 'fixed',
+            bottom: '80px',
+            right: '20px',
+            zIndex: '2147483647',
+            width: '48px',
+            height: '48px',
+            borderRadius: '50%',
+            background: 'rgba(0,161,214,0.85)',
+            color: '#fff',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: '11px',
+            fontFamily: 'sans-serif',
+            fontWeight: 'bold',
+            cursor: 'grab',
+            userSelect: 'none',
+            boxShadow: '0 3px 12px rgba(0,0,0,0.25)',
+            backdropFilter: 'blur(6px)',
+            WebkitBackdropFilter: 'blur(6px)',
+            transition: 'transform 0.15s, background 0.2s',
         });
 
-        btn.addEventListener('click', () => {
-            isUpscalerActive = !isUpscalerActive;
-            btn.innerHTML = isUpscalerActive ? '✨ 开启 RAVU-Zoom-AR' : '⏸️ 切换为原画 (直出)';
-            btn.style.backgroundColor = isUpscalerActive ? '#00a1d6' : '#666666';
+        let isDragging = false;
+        let dragStartX, dragStartY, startLeft, startTop;
+
+        function applyPos(left, top) {
+            btn.style.left = left + 'px';
+            btn.style.top = top + 'px';
+            btn.style.bottom = 'auto';
+            btn.style.right = 'auto';
+        }
+
+        btn.addEventListener('mousedown', (e) => {
+            isDragging = false;
+            const r = btn.getBoundingClientRect();
+            dragStartX = e.clientX;
+            dragStartY = e.clientY;
+            startLeft = r.left;
+            startTop = r.top;
+            applyPos(startLeft, startTop);
+            btn.style.cursor = 'grabbing';
+            btn.style.transition = 'background 0.2s';
+
+            const onMove = (ev) => {
+                isDragging = true;
+                applyPos(startLeft + ev.clientX - dragStartX, startTop + ev.clientY - dragStartY);
+            };
+            const onUp = () => {
+                document.removeEventListener('mousemove', onMove);
+                document.removeEventListener('mouseup', onUp);
+                btn.style.cursor = 'grab';
+            };
+            document.addEventListener('mousemove', onMove);
+            document.addEventListener('mouseup', onUp);
         });
+
+        btn.addEventListener('click', (e) => {
+            if (isDragging) return;
+            isUpscalerActive = !isUpscalerActive;
+            btn.style.background = isUpscalerActive ? 'rgba(0,161,214,0.85)' : 'rgba(102,102,102,0.7)';
+            btn.innerHTML = isUpscalerActive ? '<span>RAVU</span>' : '<span>OFF</span>';
+        });
+
+        btn.addEventListener('mouseenter', () => { btn.style.transform = 'scale(1.1)'; });
+        btn.addEventListener('mouseleave', () => { btn.style.transform = 'scale(1)'; });
+
         document.body.appendChild(btn);
+
+        document.addEventListener('fullscreenchange', () => {
+            const fs = document.fullscreenElement;
+            if (fs && fs !== document.body && !fs.contains(btn)) {
+                fs.appendChild(btn);
+            } else if (!fs && btn.parentNode !== document.body) {
+                document.body.appendChild(btn);
+            }
+        });
     }
     createToggleButton();
 
