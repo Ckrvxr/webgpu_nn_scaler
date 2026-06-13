@@ -389,9 +389,11 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         const canvas = document.createElement('canvas');
         canvas.style.position = 'absolute';
         canvas.style.pointerEvents = 'none';
-        canvas.style.zIndex = '9998';
         canvas.style.transition = 'opacity 0.2s';
+        const videoZIndex = getComputedStyle(video).zIndex;
+        canvas.style.zIndex = videoZIndex;
         video.parentNode.insertBefore(canvas, video.nextSibling);
+        video.style.opacity = '0';
 
         const context = canvas.getContext('webgpu');
         const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
