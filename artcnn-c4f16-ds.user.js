@@ -1,13 +1,12 @@
 // ==UserScript==
-// @name         ArtCNN C4F16 DS - WebGPU Upscaler
-// @namespace    https://github.com/anomalyco/webgpu_nn_scaler
-// @version      0.1.0
-// @description  ArtCNN C4F16 DS WebGPU neural network upscaler for Bilibili
-// @author       ported from mpv shader by Joao Chrisostomo, Kacper Michajlow
+// @name         ArtCNN-C4F16-DS for Bilibili
+// @namespace    http://tampermonkey.net/
+// @version      0.0.1
+// @description  ArtCNN-C4F16-DS WebGPU upscaler for Bilibili
+// @author       Ckrvxr
 // @match        *://*.bilibili.com/*
-// @match        *://bilibili.com/*
+// @license      LGPL-3.0-or-later
 // @grant        none
-// @run-at       document-idle
 // ==/UserScript==
 
 (async function() {
@@ -1432,6 +1431,7 @@ fn main(
             activeState.canvas?.remove();
             activeState.intermediateTextures?.forEach(function(t) { t.destroy(); });
             if (activeState.lumaTex) activeState.lumaTex.destroy();
+            if (activeState.videoTex) activeState.videoTex.destroy();
             if (activeState.dtsOutputTex) activeState.dtsOutputTex.destroy();
             if (activeState.uniformBuffer) activeState.uniformBuffer.destroy();
             activeState = null;
@@ -1543,6 +1543,12 @@ fn main(
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
         });
 
+        var videoTex = device.createTexture({
+            size: [vw, vh, 1],
+            format: 'rgba8unorm',
+            usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
+        });
+
         var dtsOutputTex = device.createTexture({
             size: [w2, h2, 1],
             format: 'rgba16float',
@@ -1600,12 +1606,28 @@ fn main(
             ],
         });
 
-        // Preprocess pipeline and bind group
+        // Preprocess pipeline + static bind groups
         var preprocessPipeline = device.createComputePipeline({
             layout: layouts.typeA.pl,
             compute: { module: preprocessModule, entryPoint: 'main' },
         });
-        activeState = { video: video, canvas: canvas, ctx: ctx, running: true, seq: seq, vw: vw, vh: vh, w2: w2, h2: h2, intermediateTextures: intermediateTextures, lumaTex: lumaTex, dtsOutputTex: dtsOutputTex, uniformBuffer: uniformBuffer, bindGroups: bindGroups, preprocessPipeline: preprocessPipeline, blitPipeline: blitPipeline, blitBindGroup: blitBindGroup, sampler: sampler };
+        var preprocessBG = device.createBindGroup({
+            layout: pipelines[2].getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: uniformBuffer } },
+                { binding: 1, resource: videoTex.createView() },
+                { binding: 2, resource: lumaTex.createView() },
+            ],
+        });
+        var bg1 = device.createBindGroup({
+            layout: pipelines[1].getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: uniformBuffer } },
+                { binding: 1, resource: lumaTex.createView() },
+                { binding: 2, resource: intermediateTextures[0].createView() },
+            ],
+        });
+        activeState = { video: video, canvas: canvas, ctx: ctx, running: true, seq: seq, vw: vw, vh: vh, w2: w2, h2: h2, intermediateTextures: intermediateTextures, lumaTex: lumaTex, videoTex: videoTex, dtsOutputTex: dtsOutputTex, uniformBuffer: uniformBuffer, bindGroups: bindGroups, preprocessPipeline: preprocessPipeline, preprocessBG: preprocessBG, bg1: bg1, blitPipeline: blitPipeline, blitBindGroup: blitBindGroup, sampler: sampler };
 
         var mySeq = seq;
         function frame() {
@@ -1676,39 +1698,16 @@ fn main(
                 var ud = new Float32Array([s.vw, s.vh, s.w2, s.h2, 1 / s.vw, 1 / s.vh, 0, 0]);
                 device.queue.writeBuffer(s.uniformBuffer, 0, ud);
 
-                // Video texture
-                var videoTex = device.createTexture({
-                    size: [s.vw, s.vh, 1],
-                    format: 'rgba8unorm',
-                    usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT,
-                });
-                device.queue.copyExternalImageToTexture({ source: v }, { texture: videoTex }, [s.vw, s.vh]);
-
-                // Per-frame bind groups
-                var preprocessBG = device.createBindGroup({
-                    layout: pipelines[2].getBindGroupLayout(0),
-                    entries: [
-                        { binding: 0, resource: { buffer: s.uniformBuffer } },
-                        { binding: 1, resource: videoTex.createView() },
-                        { binding: 2, resource: s.lumaTex.createView() },
-                    ],
-                });
-                var bg1 = device.createBindGroup({
-                    layout: pipelines[1].getBindGroupLayout(0),
-                    entries: [
-                        { binding: 0, resource: { buffer: s.uniformBuffer } },
-                        { binding: 1, resource: s.lumaTex.createView() },
-                        { binding: 2, resource: s.intermediateTextures[0].createView() },
-                    ],
-                });
+                // Video texture (static, reuse each frame)
+                device.queue.copyExternalImageToTexture({ source: v }, { texture: s.videoTex }, [s.vw, s.vh]);
 
                 var encoder = device.createCommandEncoder();
 
                 // Preprocess: video → luma
-                { var p = encoder.beginComputePass(); p.setPipeline(s.preprocessPipeline); p.setBindGroup(0, preprocessBG); p.dispatchWorkgroups(Math.ceil(s.vw / 16), Math.ceil(s.vh / 16)); p.end(); }
+                { var p = encoder.beginComputePass(); p.setPipeline(s.preprocessPipeline); p.setBindGroup(0, s.preprocessBG); p.dispatchWorkgroups(Math.ceil(s.vw / 16), Math.ceil(s.vh / 16)); p.end(); }
 
                 // Pass 1: luma → conv2d
-                { var p = encoder.beginComputePass(); p.setPipeline(pipelines[1]); p.setBindGroup(0, bg1); p.dispatchWorkgroups(Math.ceil(s.vw * 2 / 12), Math.ceil(s.vh * 2 / 16)); p.end(); }
+                { var p = encoder.beginComputePass(); p.setPipeline(pipelines[1]); p.setBindGroup(0, s.bg1); p.dispatchWorkgroups(Math.ceil(s.vw * 2 / 12), Math.ceil(s.vh * 2 / 16)); p.end(); }
 
                 // Passes 2-6
                 for (var i = 2; i <= 6; i++) {
@@ -1740,7 +1739,6 @@ fn main(
                 rp.end();
 
                 device.queue.submit([encoder.finish()]);
-                videoTex.destroy();
 
                 v.requestVideoFrameCallback(frame);
             } catch (e) {
