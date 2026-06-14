@@ -1415,6 +1415,41 @@ fn main(
 
     function log(...args) { console.log('[ArtCNN-IMG]', ...args); }
 
+    // --- Idle-aware queue ---
+    let imageQueue = [];
+    let isIdle = true;
+    let idleTimer = null;
+    let isProcessing = false;
+
+    function onUserActivity() {
+        isIdle = false;
+        clearTimeout(idleTimer);
+        idleTimer = setTimeout(() => { isIdle = true; processNextInQueue(); }, 200);
+    }
+
+    function enqueueImage(img, src) {
+        if (!img.isConnected) return;
+        if (!src || src === '') return;
+        if (src.startsWith('blob:') || src.startsWith('data:')) return;
+        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+            if (img.naturalWidth < 100 && img.naturalHeight < 100) return;
+        }
+        imageQueue.push({ img, src });
+        if (isIdle) processNextInQueue();
+    }
+
+    function processNextInQueue() {
+        if (isProcessing || !isIdle || imageQueue.length === 0 || hasWebGPUError) return;
+        isProcessing = true;
+        const { img, src } = imageQueue.shift();
+        processImage(img, src).finally(() => {
+            isProcessing = false;
+            if (isIdle && imageQueue.length > 0) {
+                setTimeout(processNextInQueue, 50);
+            }
+        });
+    }
+
     // --- Create compute pipelines (once, resolution-independent) ---
     const modules = [null];
     const pipelines = [null];
@@ -1710,15 +1745,9 @@ fn main(
 
     function checkAndProcess(img) {
         if (processedImgs.has(img)) return;
-        if (!img.isConnected) return;
-        if (!img.src || img.src === '') return;
-        if (img.src.startsWith('blob:') || img.src.startsWith('data:')) return;
-        // Skip very small images (likely icons)
-        if (img.naturalWidth > 0 && img.naturalHeight > 0) {
-            if (img.naturalWidth < 100 && img.naturalHeight < 100) return;
-        }
         processedImgs.add(img);
-        processImage(img, img.src);
+        onUserActivity(); // reset idle timer so processing waits for pause
+        enqueueImage(img, img.src);
     }
 
     if (document.readyState === 'loading') {
@@ -1740,6 +1769,11 @@ fn main(
         });
     });
     observer.observe(document.body, { childList: true, subtree: true });
+
+    // Idle detection: pause processing during user activity
+    ['scroll', 'touchmove', 'mousemove', 'wheel', 'resize'].forEach(function(ev) {
+        window.addEventListener(ev, onUserActivity, { passive: true });
+    });
 
     log('loaded');
 })();
