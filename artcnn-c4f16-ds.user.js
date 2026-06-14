@@ -1737,7 +1737,6 @@ fn main(
                 rp.setBindGroup(0, s.blitBindGroup);
                 rp.draw(3);
                 rp.end();
-
                 device.queue.submit([encoder.finish()]);
 
                 v.requestVideoFrameCallback(frame);
