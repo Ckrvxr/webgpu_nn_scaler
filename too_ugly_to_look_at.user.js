@@ -13,7 +13,7 @@
     'use strict';
 
     if (window.top !== window.self) return;
-    if (!navigator.gpu) { console.error('[ArtCNN-IMG] WebGPU not supported'); return; }
+    if (!navigator.gpu) { console.error('[🪄 Too ugly to look at] WebGPU not supported'); return; }
 
     // ===== WGSL Shaders (copied from video version) =====
     const WGSL = [null];
@@ -1407,13 +1407,13 @@ fn main(
 
     let hasWebGPUError = false;
     device.addEventListener('uncapturederror', (e) => {
-        console.error('[ArtCNN-IMG] WebGPU error:', e.error.message);
+        console.error('[🪄 Too ugly to look at] WebGPU error:', e.error.message);
         hasWebGPUError = true;
     });
 
     let isUpscalerActive = true;
 
-    function log(...args) { console.log('[ArtCNN-IMG]', ...args); }
+    function log(...args) { console.log('[🪄 Too ugly to look at]', ...args); }
 
     // --- Idle-aware queue ---
     let imageQueue = [];
@@ -1525,14 +1525,38 @@ fn main(
         if (hasWebGPUError) return;
 
         try {
+            // Skip tiny rendered images (favicons, icons) before fetching
+            const renderRect = img.getBoundingClientRect();
+            if (renderRect.width < 80 || renderRect.height < 80) {
+                log('⏭️', Math.round(renderRect.width) + 'x' + Math.round(renderRect.height), originalSrc);
+                skippedImgs.add(img);
+                return;
+            }
+
             // Fetch image via CORS
             const resp = await fetch(originalSrc, { mode: 'cors' });
-            if (!resp.ok) { console.warn('[ArtCNN-IMG] fetch failed:', originalSrc); return; }
+            if (!resp.ok) { console.warn('[🪄 Too ugly to look at] fetch failed:', originalSrc); return; }
             const blob = await resp.blob();
             const bitmap = await createImageBitmap(blob);
 
+            // Skip placeholder image: decoded size much smaller than rendered size
+            if (bitmap.width < renderRect.width * 0.4 || bitmap.height < renderRect.height * 0.4) {
+                log('⏭️', bitmap.width + 'x' + bitmap.height, originalSrc, '(' + bitmap.width + 'x' + bitmap.height + ' vs render ' + Math.round(renderRect.width) + 'x' + Math.round(renderRect.height) + ')');
+                bitmap.close();
+                skippedImgs.add(img);
+                return;
+            }
+
             const vw = bitmap.width;
             const vh = bitmap.height;
+
+            // Skip if bpp is high enough (original quality already good)
+            const bpp = blob.size / (vw * vh);
+            if (bpp > 0.35) {
+                log('⏭️', vw + 'x' + vh, (blob.size / 1024).toFixed(0) + 'KB', 'bpp=' + bpp.toFixed(2), originalSrc);
+                bitmap.close();
+                return;
+            }
 
             // Limit input size
             const maxDim = 1920;
@@ -1734,14 +1758,20 @@ fn main(
             uniformBuffer.destroy();
             bitmap.close();
 
-            log('upscaled', originalSrc, '->', w2, 'x', h2);
+            log('💡', vw + 'x' + vh, (blob.size / 1024).toFixed(0) + 'KB', '→', w2 + 'x' + h2, (outBlob.size / 1024).toFixed(0) + 'KB', 'x2', originalSrc);
         } catch (e) {
-            console.error('[ArtCNN-IMG] processImage error:', e, originalSrc);
+            if (e instanceof TypeError && e.message.includes('fetch')) {
+                log('⚠️ CORS blocked', originalSrc);
+                processedImgs.delete(img);
+            } else {
+                console.error('[🪄 Too ugly to look at] processImage error:', e, originalSrc);
+            }
         }
     }
 
     // --- Observer for <img> elements ---
     let processedImgs = new WeakSet();
+    let skippedImgs = new WeakSet();
 
     function checkAndProcess(img) {
         if (processedImgs.has(img)) return;
@@ -1757,9 +1787,18 @@ fn main(
     // Process existing images
     document.querySelectorAll('img').forEach(function(img) { checkAndProcess(img); });
 
-    // Watch for new images
+    // Watch for new images / src changes
     var observer = new MutationObserver(function(mutations) {
         mutations.forEach(function(mut) {
+            if (mut.type === 'attributes' && mut.attributeName === 'src') {
+                const img = mut.target;
+                if (processedImgs.has(img) || skippedImgs.has(img)) {
+                    processedImgs.delete(img);
+                    skippedImgs.delete(img);
+                    checkAndProcess(img);
+                }
+                return;
+            }
             mut.addedNodes.forEach(function(node) {
                 if (node.nodeType === 1) {
                     if (node.tagName === 'IMG') checkAndProcess(node);
@@ -1768,12 +1807,12 @@ fn main(
             });
         });
     });
-    observer.observe(document.body, { childList: true, subtree: true });
+    observer.observe(document.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['src'] });
 
     // Idle detection: pause processing during user activity
     ['scroll', 'touchmove', 'mousemove', 'wheel', 'resize'].forEach(function(ev) {
         window.addEventListener(ev, onUserActivity, { passive: true });
     });
 
-    log('loaded');
+    log('🚀 Too ugly to look at loaded');
 })();
