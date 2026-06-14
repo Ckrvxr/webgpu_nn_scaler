@@ -20,7 +20,7 @@
     WGSL[1] = `struct Params { inputSize: vec2f, outputSize: vec2f, texelSize: vec2f, pad: vec2f }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var LUMA_tex: texture_2d<f32>;
-@group(0) @binding(2) var outTex: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(2) var outTex: texture_storage_2d<rgba16float, write>;
 
 var<workgroup> inp: array<array<array<f32, 14>, 18>, 1>;
 @compute @workgroup_size(12, 16, 1)
@@ -103,7 +103,7 @@ fn main(
     WGSL[2] = `struct Params { inputSize: vec2f, outputSize: vec2f, texelSize: vec2f, pad: vec2f }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var conv2d_tex: texture_2d<f32>;
-@group(0) @binding(2) var outTex: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(2) var outTex: texture_storage_2d<rgba16float, write>;
 
 var<workgroup> inp: array<array<array<vec4f, 14>, 18>, 4>;
 @compute @workgroup_size(12, 16, 1)
@@ -324,7 +324,7 @@ fn main(
     WGSL[3] = `struct Params { inputSize: vec2f, outputSize: vec2f, texelSize: vec2f, pad: vec2f }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var conv2d_1_tex: texture_2d<f32>;
-@group(0) @binding(2) var outTex: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(2) var outTex: texture_storage_2d<rgba16float, write>;
 
 var<workgroup> inp: array<array<array<vec4f, 14>, 18>, 4>;
 @compute @workgroup_size(12, 16, 1)
@@ -545,7 +545,7 @@ fn main(
     WGSL[4] = `struct Params { inputSize: vec2f, outputSize: vec2f, texelSize: vec2f, pad: vec2f }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var conv2d_2_tex: texture_2d<f32>;
-@group(0) @binding(2) var outTex: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(2) var outTex: texture_storage_2d<rgba16float, write>;
 
 var<workgroup> inp: array<array<array<vec4f, 14>, 18>, 4>;
 @compute @workgroup_size(12, 16, 1)
@@ -766,7 +766,7 @@ fn main(
     WGSL[5] = `struct Params { inputSize: vec2f, outputSize: vec2f, texelSize: vec2f, pad: vec2f }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var conv2d_3_tex: texture_2d<f32>;
-@group(0) @binding(2) var outTex: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(2) var outTex: texture_storage_2d<rgba16float, write>;
 
 var<workgroup> inp: array<array<array<vec4f, 14>, 18>, 4>;
 @compute @workgroup_size(12, 16, 1)
@@ -987,7 +987,7 @@ fn main(
     WGSL[6] = `struct Params { inputSize: vec2f, outputSize: vec2f, texelSize: vec2f, pad: vec2f }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var conv2d_4_tex: texture_2d<f32>;
-@group(0) @binding(2) var outTex: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(2) var outTex: texture_storage_2d<rgba16float, write>;
 
 var<workgroup> inp: array<array<array<vec4f, 14>, 18>, 4>;
 @compute @workgroup_size(12, 16, 1)
@@ -1209,7 +1209,7 @@ fn main(
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var conv2d_tex: texture_2d<f32>;
 @group(0) @binding(2) var conv2d_5_tex: texture_2d<f32>;
-@group(0) @binding(3) var outTex: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(3) var outTex: texture_storage_2d<rgba16float, write>;
 
 var<workgroup> inp: array<array<array<vec4f, 14>, 18>, 4>;
 @compute @workgroup_size(12, 16, 1)
@@ -1385,7 +1385,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     const WGSL_PREPROCESS = `struct Params { inputSize: vec2f, outputSize: vec2f, texelSize: vec2f, pad: vec2f }
 @group(0) @binding(0) var<uniform> params: Params;
 @group(0) @binding(1) var inputTex: texture_2d<f32>;
-@group(0) @binding(2) var outputTex: texture_storage_2d<rgba32float, write>;
+@group(0) @binding(2) var outputTex: texture_storage_2d<rgba16float, write>;
 
 @compute @workgroup_size(16, 16, 1)
 fn main(
@@ -1448,7 +1448,7 @@ fn main(
         entries.push({ binding: 0, visibility: GPUShaderStage.COMPUTE, buffer: { type: 'uniform' } });
         if (i === 1 || (i >= 2 && i <= 6)) {
             entries.push({ binding: 1, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float' } });
-            entries.push({ binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { format: 'rgba32float', access: 'write-only' } });
+            entries.push({ binding: 2, visibility: GPUShaderStage.COMPUTE, storageTexture: { format: 'rgba16float', access: 'write-only' } });
             if (!layouts.typeA) {
                 const bg = device.createBindGroupLayout({ entries });
                 layouts.typeA = { bgl: bg, pl: device.createPipelineLayout({ bindGroupLayouts: [bg] }) };
@@ -1460,7 +1460,7 @@ fn main(
         } else if (i === 7) {
             entries.push({ binding: 1, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float' } });
             entries.push({ binding: 2, visibility: GPUShaderStage.COMPUTE, texture: { sampleType: 'unfilterable-float' } });
-            entries.push({ binding: 3, visibility: GPUShaderStage.COMPUTE, storageTexture: { format: 'rgba32float', access: 'write-only' } });
+            entries.push({ binding: 3, visibility: GPUShaderStage.COMPUTE, storageTexture: { format: 'rgba16float', access: 'write-only' } });
             if (!layouts.typeB) {
                 const bg = device.createBindGroupLayout({ entries });
                 layouts.typeB = { bgl: bg, pl: device.createPipelineLayout({ bindGroupLayouts: [bg] }) };
@@ -1528,18 +1528,18 @@ fn main(
         const h1 = Math.ceil(vh);
 
         var intermediateTextures = [
-            device.createTexture({ size: [w2, h2, 1], format: 'rgba32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
-            device.createTexture({ size: [w2, h2, 1], format: 'rgba32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
-            device.createTexture({ size: [w2, h2, 1], format: 'rgba32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
-            device.createTexture({ size: [w2, h2, 1], format: 'rgba32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
-            device.createTexture({ size: [w2, h2, 1], format: 'rgba32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
-            device.createTexture({ size: [w2, h2, 1], format: 'rgba32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
-            device.createTexture({ size: [w1, h1, 1], format: 'rgba32float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
+            device.createTexture({ size: [w2, h2, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
+            device.createTexture({ size: [w2, h2, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
+            device.createTexture({ size: [w2, h2, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
+            device.createTexture({ size: [w2, h2, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
+            device.createTexture({ size: [w2, h2, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
+            device.createTexture({ size: [w2, h2, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
+            device.createTexture({ size: [w1, h1, 1], format: 'rgba16float', usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING }),
         ];
 
         var lumaTex = device.createTexture({
             size: [vw, vh, 1],
-            format: 'rgba32float',
+            format: 'rgba16float',
             usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.STORAGE_BINDING,
         });
 
