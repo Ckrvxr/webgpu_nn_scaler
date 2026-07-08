@@ -567,7 +567,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
                     videoTexture?.destroy();
                     videoTexture = device.createTexture({
                         size: [w, h, 1],
-                        format: 'rgba8unorm',
+                        format: 'rgba16float',
                         usage: GPUTextureUsage.TEXTURE_BINDING | GPUTextureUsage.COPY_DST | GPUTextureUsage.RENDER_ATTACHMENT
                     });
                     cachedBindGroup = device.createBindGroup({
