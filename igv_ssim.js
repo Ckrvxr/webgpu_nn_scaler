@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         SSimDownscaler & SSimSuperRes for Bilibili & Youtube
 // @namespace    http://tampermonkey.net/
-// @version      0.1.0
+// @version      0.1.1
 // @description  SSimDownscaler + SSimSuperRes (WebGPU port) for Bilibili & Youtube
 // @author       Ckrvxr,igv
 // @match        *://*.bilibili.com/*
@@ -16,19 +16,19 @@
     if (window.top !== window.self) return;
 
     if (!navigator.gpu) {
-        console.error("[SSim] WebGPU not supported");
+        console.error("❌ [SSim] WebGPU not supported");
         return;
     }
 
     const adapter = await navigator.gpu.requestAdapter();
-    console.log("[SSim] WebGPU adapter:", adapter.info ? `${adapter.info.vendor} ${adapter.info.architecture}` : "unknown");
+    console.log("🖥️ [SSim] WebGPU adapter:", adapter.info ? `${adapter.info.vendor} ${adapter.info.architecture}` : "unknown");
     const device = await adapter.requestDevice();
-    console.log("[SSim] WebGPU device ready, features:", [...device.features].join(", "));
+    console.log("✅ [SSim] WebGPU device ready, features:", [...device.features].join(", "));
 
     let hasWebGPUError = false;
     let lastErrorTime = 0;
     device.addEventListener('uncapturederror', (event) => {
-        console.error("[SSim] WebGPU error:", event.error.message);
+        console.error("⚠️ [SSim] WebGPU error:", event.error.message);
         hasWebGPUError = true;
         lastErrorTime = Date.now();
     });
@@ -47,7 +47,7 @@
             }
             activeState.canvas?.remove();
             activeState = null;
-            console.log("[SSim] Cleaned up stale render state");
+            console.log("🧹 [SSim] Cleaned up stale render state");
         }
     }
 
@@ -94,11 +94,11 @@ fn MN(B: f32, C: f32, x: f32) -> f32 {
 }
 
 fn KernelDown(x: f32) -> f32 {
-    return MN(0.0, 0.5, abs(x));
+    return MN(0.334, 0.333, abs(x));
 }
 
 fn KernelSR(x: f32) -> f32 {
-    return MN(0.334, 0.333, abs(x));
+    return MN(0.0, 0.5, abs(x));
 }
 
 fn KernelExp(x: f32) -> f32 {
@@ -126,8 +126,75 @@ fn vs_main(@builtin(vertex_index) vertexIndex: u32) -> VertexOutput {
 }
 
 @fragment
-fn fs_bilinear(input: VertexOutput) -> @location(0) vec4<f32> {
-    return textureSampleLevel(texA, inputSampler, input.uv, 0.0);
+fn fs_base_down(input: VertexOutput) -> @location(0) vec4<f32> {
+    let uv = input.uv;
+    let taps = 2.0;
+
+    let low_x = ceil((uv.x - taps * params.canvasTexelSize.x) * params.videoSize.x - 0.5);
+    let high_x = floor((uv.x + taps * params.canvasTexelSize.x) * params.videoSize.x - 0.5);
+    let low_y = ceil((uv.y - taps * params.canvasTexelSize.y) * params.videoSize.y - 0.5);
+    let high_y = floor((uv.y + taps * params.canvasTexelSize.y) * params.videoSize.y - 0.5);
+
+    var W = 0.0;
+    var avg = vec4<f32>(0.0);
+
+    var j: f32 = low_y;
+    while (j <= high_y) {
+        let pos_y = params.videoTexelSize.y * (j + 0.5);
+        let rel_y = (pos_y - uv.y) * params.canvasSize.y;
+        let wy = KernelDown(rel_y);
+
+        var i: f32 = low_x;
+        while (i <= high_x) {
+            let pos_x = params.videoTexelSize.x * (i + 0.5);
+            let rel_x = (pos_x - uv.x) * params.canvasSize.x;
+            let wx = KernelDown(rel_x);
+
+            let tex = textureSampleLevel(texA, inputSampler, vec2<f32>(pos_x, pos_y), 0.0);
+            avg = avg + wx * wy * tex;
+            W = W + wx * wy;
+            i = i + 1.0;
+        }
+        j = j + 1.0;
+    }
+    avg = avg / W;
+    return avg;
+}
+
+@fragment
+fn fs_base_sr(input: VertexOutput) -> @location(0) vec4<f32> {
+    let uv = input.uv;
+    let taps = 2.0;
+
+    let low_x = ceil((uv.x - taps * params.canvasTexelSize.x) * params.videoSize.x - 0.5);
+    let high_x = floor((uv.x + taps * params.canvasTexelSize.x) * params.videoSize.x - 0.5);
+    let low_y = ceil((uv.y - taps * params.canvasTexelSize.y) * params.videoSize.y - 0.5);
+    let high_y = floor((uv.y + taps * params.canvasTexelSize.y) * params.videoSize.y - 0.5);
+
+    var W = 0.0;
+    var avg = vec4<f32>(0.0);
+
+    var j: f32 = low_y;
+    while (j <= high_y) {
+        let pos_y = params.videoTexelSize.y * (j + 0.5);
+        let rel_y = (pos_y - uv.y) * params.canvasSize.y;
+        let wy = KernelSR(rel_y);
+
+        var i: f32 = low_x;
+        while (i <= high_x) {
+            let pos_x = params.videoTexelSize.x * (i + 0.5);
+            let rel_x = (pos_x - uv.x) * params.canvasSize.x;
+            let wx = KernelSR(rel_x);
+
+            let tex = textureSampleLevel(texA, inputSampler, vec2<f32>(pos_x, pos_y), 0.0);
+            avg = avg + wx * wy * tex;
+            W = W + wx * wy;
+            i = i + 1.0;
+        }
+        j = j + 1.0;
+    }
+    avg = avg / W;
+    return avg;
 }
 
 @fragment
@@ -472,7 +539,7 @@ fn fs_sr_final(input: VertexOutput) -> @location(0) vec4<f32> {
     `;
 
     const shaderModule = device.createShaderModule({ code: wgslCode });
-    console.log("[SSim] WGSL shader compiled");
+    console.log("✨ [SSim] WGSL shader compiled");
 
     const linearSampler = device.createSampler({
         magFilter: 'linear',
@@ -522,7 +589,7 @@ fn fs_sr_final(input: VertexOutput) -> @location(0) vec4<f32> {
         cleanupActive(true);
         const seq = ++hijackSeq;
         const src = video.currentSrc || video.src || "no src";
-        console.log("[SSim] Video found, src:", src.substring(0, 80));
+        console.log("🎬 [SSim] Video found, src:", src.substring(0, 80));
         video.dataset.ssimHijacked = "true";
         video.crossOrigin = "anonymous";
 
@@ -537,12 +604,13 @@ fn fs_sr_final(input: VertexOutput) -> @location(0) vec4<f32> {
 
         activeState = { video, canvas, running: true, seq };
 
-        console.log("[SSim] Building SSim WebGPU render layer...");
+        console.log("🔧 [SSim] Building SSim WebGPU render layer...");
         const context = canvas.getContext('webgpu');
         const presentationFormat = navigator.gpu.getPreferredCanvasFormat();
         context.configure({ device, format: presentationFormat, alphaMode: 'premultiplied' });
 
-        const pBilinear = makePipeline('fs_bilinear', RGBA16F);
+        const pBaseDown = makePipeline('fs_base_down', RGBA16F);
+        const pBaseSR = makePipeline('fs_base_sr', RGBA16F);
         const pDownL2V = makePipeline('fs_down_l2_v', RGBA16F);
         const pDownL2H = makePipeline('fs_down_l2_h', RGBA16F);
         const pDownMR = makePipeline('fs_down_mr', RGBA16F);
@@ -551,7 +619,7 @@ fn fs_sr_final(input: VertexOutput) -> @location(0) vec4<f32> {
         const pSRLowresH = makePipeline('fs_sr_lowres_h', RGBA16F);
         const pSRVar = makePipeline('fs_sr_var', RGBA16F);
         const pSRFinal = makePipeline('fs_sr_final', presentationFormat);
-        console.log("[SSim] All pipelines created, format:", presentationFormat);
+        console.log("✅ [SSim] All pipelines created, format:", presentationFormat);
 
         let frameCount = 0;
         let lastVideoRes = "";
@@ -593,7 +661,7 @@ fn fs_sr_final(input: VertexOutput) -> @location(0) vec4<f32> {
 
             bindGroups = {};
 
-            console.log("[SSim] Textures (re)created for", vw + "x" + vh, "->", cw + "x" + ch);
+            console.log("🖼️ [SSim] Textures (re)created for", vw + "x" + vh, "->", cw + "x" + ch);
         }
 
         function getBG(name, pipeline, slot, resources, hasUniform) {
@@ -661,7 +729,7 @@ fn fs_sr_final(input: VertexOutput) -> @location(0) vec4<f32> {
 
             const resKey = v.videoWidth + "x" + v.videoHeight;
             if (resKey !== lastVideoRes) {
-                console.log("[SSim] Source resolution:", resKey);
+                console.log("📺 [SSim] Source resolution:", resKey);
                 lastVideoRes = resKey;
             }
 
@@ -686,13 +754,13 @@ fn fs_sr_final(input: VertexOutput) -> @location(0) vec4<f32> {
 
             const mode = isDownscaling ? "downscale" : "superres";
             if (mode !== lastMode) {
-                console.log("[SSim] Mode:", mode);
+                console.log("⚙️ [SSim] Mode:", mode);
                 lastMode = mode;
             }
 
             const canvasRes = dstW + "x" + dstH;
             if (canvasRes !== lastCanvasRes) {
-                console.log("[SSim] Output resolution:", canvasRes, "@", dpr + "x DPR");
+                console.log("📐 [SSim] Output resolution:", canvasRes, "@", dpr + "x DPR");
                 lastCanvasRes = canvasRes;
             }
             if (c.width !== dstW || c.height !== dstH) {
@@ -744,8 +812,8 @@ fn fs_sr_final(input: VertexOutput) -> @location(0) vec4<f32> {
 
             if (isDownscaling) {
                 writeUniforms(0, srcW, srcH, dstW, dstH, srcW, srcH);
-                runPass(encoder, pBilinear,
-                    getBG('bilinear', pBilinear, 0, [videoTexture.createView()], false),
+                runPass(encoder, pBaseDown,
+                    getBG('base_down', pBaseDown, 0, [videoTexture.createView()]),
                     texState.postKernel.createView(), false);
 
                 writeUniforms(1, srcW, srcH, dstW, dstH, srcW, srcH);
@@ -769,8 +837,8 @@ fn fs_sr_final(input: VertexOutput) -> @location(0) vec4<f32> {
                     context.getCurrentTexture().createView(), true);
             } else {
                 writeUniforms(0, srcW, srcH, dstW, dstH, srcW, srcH);
-                runPass(encoder, pBilinear,
-                    getBG('bilinear', pBilinear, 0, [videoTexture.createView()], false),
+                runPass(encoder, pBaseSR,
+                    getBG('base_sr', pBaseSR, 0, [videoTexture.createView()]),
                     texState.postKernel.createView(), false);
 
                 writeUniforms(5, srcW, srcH, dstW, dstH, dstW, dstH);
@@ -802,7 +870,7 @@ fn fs_sr_final(input: VertexOutput) -> @location(0) vec4<f32> {
             device.queue.submit([encoder.finish()]);
 
             if (frameCount++ === 0) {
-                console.log("[SSim] First frame rendered successfully");
+                console.log("🎉 [SSim] First frame rendered successfully");
             }
 
             v.requestVideoFrameCallback(frame);
@@ -814,10 +882,10 @@ fn fs_sr_final(input: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     if (document.readyState === 'loading') {
-        console.log("[SSim] Waiting for DOMContentLoaded...");
+        console.log("⏳ [SSim] Waiting for DOMContentLoaded...");
         await new Promise(resolve => document.addEventListener('DOMContentLoaded', resolve, { once: true }));
     }
-    console.log("[SSim] Page ready, starting observer");
+    console.log("🚀 [SSim] Page ready, starting observer");
     const observer = new MutationObserver(() => document.querySelectorAll('video').forEach(hijackVideo));
     observer.observe(document.body, { childList: true, subtree: true });
     document.querySelectorAll('video').forEach(hijackVideo);
