@@ -3,7 +3,7 @@
 // @namespace    http://tampermonkey.net/
 // @version      0.1.0
 // @description  SSimDownscaler + SSimSuperRes (WebGPU port) for Bilibili & Youtube
-// @author       Ckrvxr
+// @author       Ckrvxr,igv
 // @match        *://*.bilibili.com/*
 // @match        *://*.youtube.com/*
 // @license      LGPL-3.0-or-later
